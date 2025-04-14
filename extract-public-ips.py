@@ -1,4 +1,12 @@
 import boto3
+import socket
+
+def get_aws_account_info():
+    """Retrieve AWS account information."""
+    sts = boto3.client('sts')
+    identity = sts.get_caller_identity()
+    account_id = identity['Account']
+    return account_id
 
 def get_ec2_public_ips():
     """Retrieve public IP addresses from EC2 instances."""
@@ -22,8 +30,13 @@ def get_elb_public_ips():
     # Describe all classic load balancers
     response = elb.describe_load_balancers()
     for load_balancer in response['LoadBalancerDescriptions']:
-        for address in load_balancer['DNSName']:
-            public_ips.append(address)
+        dns_name = load_balancer['DNSName']
+        try:
+            # Resolve DNS name to IP address
+            ip_address = socket.gethostbyname(dns_name)
+            public_ips.append(ip_address)
+        except socket.gaierror:
+            print(f"Could not resolve DNS name: {dns_name}")
 
     return public_ips
 
@@ -36,12 +49,22 @@ def get_elbv2_public_ips():
     response = elbv2.describe_load_balancers()
     for load_balancer in response['LoadBalancers']:
         if load_balancer['Scheme'] == 'internet-facing':
-            public_ips.append(load_balancer['DNSName'])
+            dns_name = load_balancer['DNSName']
+            try:
+                # Resolve DNS name to IP address
+                ip_address = socket.gethostbyname(dns_name)
+                public_ips.append(ip_address)
+            except socket.gaierror:
+                print(f"Could not resolve DNS name: {dns_name}")
 
     return public_ips
 
 def main():
     """Main function to extract all public IPs."""
+    # Get AWS account information
+    account_id = get_aws_account_info()
+    print(f"AWS Account ID: {account_id}")
+
     all_public_ips = []
 
     # Get public IPs from EC2 instances
@@ -57,7 +80,7 @@ def main():
     all_public_ips.extend(elbv2_ips)
 
     # Print all public IPs
-    print("Public IP addresses in the AWS account:")
+    print(f"Public IP addresses in the AWS account ({account_id}):")
     for ip in all_public_ips:
         print(ip)
 
